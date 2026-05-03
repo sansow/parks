@@ -31,7 +31,7 @@ spec:
   source:
     type: Git
     git:
-      uri: https://github.com/sansow/openshift-25.git
+      uri: https://github.com/sansow/nationalparks.git
       ref: main
   strategy:
     type: Source
