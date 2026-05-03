@@ -38,7 +38,7 @@ spec:
     sourceStrategy:
       from:
         kind: ImageStreamTag
-        name: openjdk-17-ubi8:latest
+        name: openjdk-17-ubi8
         namespace: openshift
   output:
     to:
