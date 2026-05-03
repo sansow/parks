@@ -1,0 +1,143 @@
+# =============================================================================
+# MongoDB on a Fedora 39 VM via OpenShift Virtualization (KubeVirt).
+# Cloud-init installs MongoDB 7 from the MongoDB.org RHEL 9 repo, creates the
+# admin + app users, then enables auth. Fully reproducible — no manual steps.
+#
+# Prereq: HyperConverged has useEmulation=true if running on AWS sandbox
+# without bare-metal nodes (set via:
+#   oc annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
+#     --overwrite kubevirt.kubevirt.io/jsonpatch=\
+#       '[{"op":"add","path":"/spec/configuration/developerConfiguration",
+#          "value":{"useEmulation":true}}]'
+# )
+# =============================================================================
+---
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: mongodb-fedora-disk
+  namespace: parks
+spec:
+  source:
+    registry:
+      url: docker://quay.io/containerdisks/fedora:39
+  storage:
+    accessModes: [ReadWriteOnce]
+    resources:
+      requests:
+        storage: 30Gi
+    storageClassName: ocs-storagecluster-ceph-rbd
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: mongodb
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: mongodb
+    app.kubernetes.io/part-of: parks
+    app.kubernetes.io/component: database
+spec:
+  runStrategy: Always
+  dataVolumeTemplates:
+    - metadata:
+        name: mongodb-fedora-disk
+      spec:
+        source:
+          pvc:
+            namespace: parks
+            name: mongodb-fedora-disk
+        storage:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests: { storage: 30Gi }
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: mongodb
+        kubevirt.io/size: medium
+        app.kubernetes.io/name: mongodb
+        app.kubernetes.io/part-of: parks
+    spec:
+      domain:
+        cpu:    { cores: 2, sockets: 1, threads: 1 }
+        memory: { guest: 3Gi }
+        devices:
+          disks:
+            - { name: rootdisk,      disk: { bus: virtio } }
+            - { name: cloudinitdisk, disk: { bus: virtio } }
+          interfaces:
+            - { name: default, masquerade: {} }
+          rng: {}
+        machine: { type: pc-q35-rhel9.4.0 }
+        resources:
+          requests: { memory: 3Gi }
+      networks:
+        - name: default
+          pod: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+        - name: rootdisk
+          dataVolume: { name: mongodb-fedora-disk }
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              ssh_pwauth: true
+              chpasswd:
+                expire: false
+                list: |
+                  fedora:fedora
+              write_files:
+                - path: /etc/yum.repos.d/mongodb-org-7.0.repo
+                  content: |
+                    [mongodb-org-7.0]
+                    name=MongoDB Repository
+                    baseurl=https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/
+                    gpgcheck=1
+                    enabled=1
+                    gpgkey=https://pgp.mongodb.com/server-7.0.asc
+                - path: /usr/local/bin/mongo-bootstrap.sh
+                  permissions: '0755'
+                  content: |
+                    #!/bin/bash
+                    set -ex
+                    # 1) install
+                    dnf install -y mongodb-org mongodb-mongosh
+
+                    # 2) bind to all interfaces
+                    sed -i 's|^  bindIp: 127.0.0.1|  bindIp: 0.0.0.0|' /etc/mongod.conf
+
+                    # 3) start (no auth yet)
+                    systemctl enable --now mongod
+                    sleep 15
+
+                    # 4) create users
+                    mongosh <<'MONGO'
+                    db = db.getSiblingDB('admin')
+                    try { db.dropUser('admin') } catch(e) {}
+                    db.createUser({ user:'admin', pwd:'mongodb', roles:['root'] })
+
+                    db = db.getSiblingDB('mongodb')
+                    try { db.dropUser('mongodb') } catch(e) {}
+                    db.createUser({
+                      user: 'mongodb',
+                      pwd:  'mongodb',
+                      roles: [ { role:'readWrite', db:'mongodb' } ]
+                    })
+                    db.parks.insertOne({ _seed: true })
+                    MONGO
+
+                    # 5) enable auth and restart
+                    cat >> /etc/mongod.conf <<'EOF'
+
+                    security:
+                      authorization: enabled
+                    EOF
+                    systemctl restart mongod
+                    sleep 5
+
+                    # 6) marker file so we can confirm bootstrap finished
+                    echo "mongodb-bootstrap-complete $(date -Iseconds)" > /var/log/mongo-bootstrap.done
+              runcmd:
+                - /usr/local/bin/mongo-bootstrap.sh

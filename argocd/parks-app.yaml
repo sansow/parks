@@ -1,0 +1,39 @@
+# =============================================================================
+# Single Argo Application that drives the whole parks demo:
+#   namespace + RBAC, MongoDB Secret, MongoDB VM (cloud-init bootstrap),
+#   Service that fronts the VM, nationalparks Spring Boot backend, parksmap UI.
+#
+# Patch sansow/parks + manifests to your fork before applying.
+# Default path assumes the manifests live at parks/manifests in your repo.
+# =============================================================================
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: parks
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/sansow/parks.git'
+    targetRevision: main
+    path: 'manifests'                         # e.g. parks/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    # No namespace here — manifests create their own (Namespace is cluster-scoped).
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

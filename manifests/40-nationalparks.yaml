@@ -1,0 +1,93 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nationalparks
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: nationalparks
+    app.kubernetes.io/part-of: parks
+    app.kubernetes.io/component: backend
+  annotations:
+    image.openshift.io/triggers: |
+      [{
+        "from": {"kind": "ImageStreamTag", "name": "nationalparks:latest"},
+        "fieldPath": "spec.template.spec.containers[?(@.name==\"nationalparks\")].image"
+      }]
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: nationalparks } }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nationalparks
+        app.kubernetes.io/part-of: parks
+    spec:
+      containers:
+        - name: nationalparks
+          # The image-trigger annotation above rewrites this to the SHA of
+          # whichever ImageStreamTag is current. Initial value is the
+          # ImageStream resolution path.
+          image: image-registry.openshift-image-registry.svc:5000/parks/nationalparks:latest
+          imagePullPolicy: Always
+          ports:
+            - { containerPort: 8080, name: http }
+          env:
+            - { name: DB_HOST, value: mongodb }
+            - { name: DB_PORT, value: "27017" }
+            - { name: DB_USERNAME,
+                valueFrom: { secretKeyRef: { name: mongodb, key: database-user } } }
+            - { name: DB_PASSWORD,
+                valueFrom: { secretKeyRef: { name: mongodb, key: database-password } } }
+            - { name: DB_NAME,
+                valueFrom: { secretKeyRef: { name: mongodb, key: database-name } } }
+            # Spring Boot 3.x convention — newer image versions read these instead.
+            - { name: SPRING_DATA_MONGODB_HOST, value: mongodb }
+            - { name: SPRING_DATA_MONGODB_PORT, value: "27017" }
+            - { name: SPRING_DATA_MONGODB_DATABASE,
+                valueFrom: { secretKeyRef: { name: mongodb, key: database-name } } }
+            - { name: SPRING_DATA_MONGODB_USERNAME,
+                valueFrom: { secretKeyRef: { name: mongodb, key: database-user } } }
+            - { name: SPRING_DATA_MONGODB_PASSWORD,
+                valueFrom: { secretKeyRef: { name: mongodb, key: database-password } } }
+            - { name: SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE,
+                valueFrom: { secretKeyRef: { name: mongodb, key: database-name } } }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /ws/healthz, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /ws/healthz, port: 8080 }
+            initialDelaySeconds: 60
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nationalparks
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: nationalparks
+spec:
+  selector: { app.kubernetes.io/name: nationalparks }
+  ports: [{ name: http, port: 8080, targetPort: 8080 }]
+---
+# IMPORTANT: the Route label below is the discovery selector parksmap uses.
+# Default upstream parksmap looks for type=parksmap-backend.
+# You asked for type=nationalparks-backend — set parksmap's BACKEND_LABEL
+# (or equivalent) env var if it doesn't auto-discover.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: nationalparks
+  namespace: parks
+  labels:
+    type: nationalparks-backend
+spec:
+  to: { kind: Service, name: nationalparks }
+  port: { targetPort: http }
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

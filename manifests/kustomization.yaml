@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 00-namespace.yaml
+  - 10-mongodb-secret.yaml
+  - 20-mongodb-vm.yaml
+  - 30-mongodb-service.yaml
+  - 35-nationalparks-build.yaml      # S2I build from sansow/nationalparks
+  - 40-nationalparks.yaml
+  # - 50-parksmap.yaml               # add after Phase 1 (Argo + nationalparks) is green

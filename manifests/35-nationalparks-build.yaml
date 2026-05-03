@@ -1,0 +1,54 @@
+# =============================================================================
+# S2I build for nationalparks — pulls source from sansow/nationalparks fork,
+# builds with the openshift/openjdk-17-ubi9 builder image, and pushes to a
+# local ImageStream `nationalparks:latest`.
+#
+# Triggers: ConfigChange + ImageChange auto-fire on first create.
+# Webhook URL: oc describe bc nationalparks -n parks | grep "Webhook URL"
+# =============================================================================
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: nationalparks
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: nationalparks
+    app.kubernetes.io/part-of: parks
+spec:
+  lookupPolicy:
+    local: true                         # let kubelet resolve image-registry refs
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: nationalparks
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: nationalparks
+    app.kubernetes.io/part-of: parks
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/sansow/nationalparks.git
+      ref: main
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: ImageStreamTag
+        name: openjdk-17-ubi9:latest
+        namespace: openshift
+  output:
+    to:
+      kind: ImageStreamTag
+      name: nationalparks:latest
+  triggers:
+    - type: ConfigChange                # build on first apply
+    - type: ImageChange                 # rebuild when builder image updates
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources:
+    limits:
+      memory: 1Gi
