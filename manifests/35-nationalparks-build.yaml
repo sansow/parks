@@ -32,7 +32,7 @@ spec:
     type: Git
     git:
       uri: https://github.com/sansow/nationalparks.git
-      ref: main
+      ref: master
   strategy:
     type: Source
     sourceStrategy:
