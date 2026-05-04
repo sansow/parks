@@ -50,7 +50,7 @@ public class WeatherResource {
                                 "\"hint\":\"try yellowstone, yosemite, grand-canyon, zion, glacier, acadia, olympic, rocky-mountain, great-smoky, joshua-tree, denali, everglades\"}")
                         .build();
             }
-            return Response.ok(fetch(park, c.lat, c.lon)).build();
+            return Response.ok(fetch(park, c.lat(), c.lon())).build();
         }
         if (lat != null && lon != null) {
             return Response.ok(fetch(String.format("%.3f,%.3f", lat, lon), lat, lon)).build();
