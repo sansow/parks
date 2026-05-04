@@ -35,6 +35,7 @@ spec:
           env:
             - { name: DB_HOST, value: mongodb }
             - { name: DB_PORT, value: "27017" }
+            - { name: MONGODB_SERVER_HOST, value: mongodb }
             - { name: DB_USERNAME,
                 valueFrom: { secretKeyRef: { name: mongodb, key: database-user } } }
             - { name: DB_PASSWORD,
