@@ -5,8 +5,10 @@ resources:
   - 10-mongodb-secret.yaml
   - 20-mongodb-vm.yaml
   - 30-mongodb-service.yaml
-  - 35-nationalparks-build.yaml      # S2I build from sansow/nationalparks
+  - 35-nationalparks-build.yaml      # S2I BuildConfig (image build)
   - 40-nationalparks.yaml
-  - 50-parksmap.yaml               # add after Phase 1 (Argo + nationalparks) is green
-  - 55-weather-build.yaml          # weather S2I build
-  - 60-weather-knative.yaml        # serverless weather endpoint
+  - 45-nationalparks-pipeline.yaml   # Tekton CI pipeline (orchestrates clone+test+trigger)
+  - 50-parksmap.yaml
+  - 55-weather-build.yaml
+  - 60-weather-knative.yaml
+  # 60-weather-deploy.yaml — alternate (regular Deployment); not used now

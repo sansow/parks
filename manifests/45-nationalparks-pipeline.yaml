@@ -1,0 +1,100 @@
+# =============================================================================
+# Tekton Pipeline for nationalparks. Orchestrates clone -> unit-test ->
+# trigger S2I BuildConfig. The actual containerization is still S2I (35-...);
+# this Pipeline adds the CI layer on top: real tests, visible TaskRun output,
+# extensible with security scans / SonarQube / GitOps bumps.
+#
+# Run with:
+#   oc create -f tekton-runs/nationalparks-pipelinerun.yaml
+# =============================================================================
+---
+# Permission for the pipeline SA to start the BuildConfig
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tekton-pipeline-buildtrigger
+  namespace: parks
+rules:
+  - apiGroups: [build.openshift.io]
+    resources: [builds, buildconfigs, buildconfigs/instantiate]
+    verbs: [get, list, create, watch]
+  - apiGroups: [""]
+    resources: [pods, pods/log]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tekton-pipeline-buildtrigger
+  namespace: parks
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tekton-pipeline-buildtrigger
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: parks
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: nationalparks-ci
+  namespace: parks
+  labels:
+    app.kubernetes.io/part-of: parks
+    app.kubernetes.io/name: nationalparks
+spec:
+  params:
+    - { name: git-url,         default: 'https://github.com/sansow/openshift-25.git' }
+    - { name: git-revision,    default: 'main' }
+    - { name: build-config,    default: 'nationalparks',
+        description: 'Name of the OpenShift BuildConfig to trigger after tests pass' }
+  workspaces:
+    - { name: source,          description: 'Source code workspace (PVC)' }
+    - { name: maven-settings,  description: 'Maven settings (emptyDir is fine)' }
+  tasks:
+
+    - name: fetch
+      taskRef: { name: git-clone, kind: ClusterTask }
+      workspaces:
+        - { name: output, workspace: source }
+      params:
+        - { name: url,             value: $(params.git-url) }
+        - { name: revision,        value: $(params.git-revision) }
+        - { name: deleteExisting,  value: 'true' }
+
+    - name: unit-test
+      runAfter: [fetch]
+      taskRef: { name: maven, kind: ClusterTask }
+      workspaces:
+        - { name: source,         workspace: source }
+        - { name: maven-settings, workspace: maven-settings }
+      params:
+        - name: GOALS
+          value:
+            - clean
+            - test
+
+    - name: build-image
+      runAfter: [unit-test]
+      taskRef: { name: openshift-client, kind: ClusterTask }
+      params:
+        - name: SCRIPT
+          value: |
+            echo ">> triggering OpenShift BuildConfig $(params.build-config)"
+            oc start-build $(params.build-config) -n parks --follow --wait
+            echo ">> build complete"
+            oc get is $(params.build-config) -n parks -o jsonpath='{.status.tags[0].items[0].dockerImageReference}'
+            echo
+
+  finally:
+    - name: report
+      taskRef: { name: openshift-client, kind: ClusterTask }
+      params:
+        - name: SCRIPT
+          value: |
+            echo "==== nationalparks pipeline summary ===="
+            oc -n parks get pipelinerun --sort-by=.metadata.creationTimestamp | tail -5
+            echo
+            oc -n parks get is nationalparks

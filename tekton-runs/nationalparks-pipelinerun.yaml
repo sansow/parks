@@ -1,0 +1,30 @@
+# =============================================================================
+# PipelineRun for nationalparks-ci. PipelineRuns are transactional, NOT
+# desired state — don't put them in the Argo-managed kustomization. Apply
+# manually with `oc create -f` to fire a build.
+#
+# Defaults to the main branch of sansow/openshift-25; override with -p.
+# =============================================================================
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: nationalparks-ci-
+  namespace: parks
+  labels:
+    tekton.dev/pipeline: nationalparks-ci
+spec:
+  serviceAccountName: pipeline
+  pipelineRef: { name: nationalparks-ci }
+  params:
+    - { name: git-url,      value: 'https://github.com/sansow/openshift-25.git' }
+    - { name: git-revision, value: 'main' }
+    - { name: build-config, value: 'nationalparks' }
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 2Gi } }
+    - name: maven-settings
+      emptyDir: {}
