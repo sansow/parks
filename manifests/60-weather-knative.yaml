@@ -1,0 +1,46 @@
+# =============================================================================
+# Knative Service — serverless weather lookup. Scales to zero when idle, spins
+# up replicas under load. Knative auto-creates a Route (so no separate Route
+# resource needed). Image is built by the BuildConfig in 55-weather-build.yaml.
+# =============================================================================
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: weather
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: weather
+    app.kubernetes.io/part-of: parks
+    app.kubernetes.io/component: serverless-api
+spec:
+  template:
+    metadata:
+      # Revision name. Bump v1 -> v2 between builds to demo revisions
+      # and traffic splitting.
+      name: weather-v1
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/max-scale: "20"
+        autoscaling.knative.dev/target: "5"
+        autoscaling.knative.dev/metric: "concurrency"
+        autoscaling.knative.dev/scale-down-delay: "60s"
+    spec:
+      containerConcurrency: 10
+      timeoutSeconds: 30
+      containers:
+        - image: image-registry.openshift-image-registry.svc:5000/parks/weather:latest
+          imagePullPolicy: Always
+          ports:
+            - { containerPort: 8080, name: http1 }
+          env:
+            - { name: REVISION_LABEL, value: "v1" }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+          readinessProbe:
+            httpGet: { path: /q/health/ready, port: 8080 }
+          livenessProbe:
+            httpGet: { path: /q/health/live, port: 8080 }
+  traffic:
+    - latestRevision: true
+      percent: 100

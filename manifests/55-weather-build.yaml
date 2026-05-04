@@ -1,0 +1,58 @@
+# =============================================================================
+# S2I build for the weather-service Quarkus app.
+# Source: github.com/sansow/parks (mono-repo) with contextDir=weather-service.
+# Builder: ubi8-openjdk-17:1.18 (matches nationalparks builder).
+# Output ImageStream: parks/weather:latest
+# =============================================================================
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: weather
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: weather
+    app.kubernetes.io/part-of: parks
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: weather
+  namespace: parks
+  labels:
+    app.kubernetes.io/name: weather
+    app.kubernetes.io/part-of: parks
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/sansow/parks.git
+      ref: main
+    contextDir: weather-service
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: ImageStreamTag
+        name: ubi8-openjdk-17:1.18
+        namespace: openshift
+      env:
+        # Quarkus needs MAVEN_S2I_GOALS to skip tests and use packaged target
+        - { name: MAVEN_S2I_GOALS, value: "package -DskipTests" }
+        - { name: ARTIFACT_DIR,    value: "target/quarkus-app" }
+        - { name: ARTIFACT_COPY_ARGS, value: "-r target/quarkus-app/*" }
+  output:
+    to:
+      kind: ImageStreamTag
+      name: weather:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources:
+    limits:
+      memory: 1Gi
