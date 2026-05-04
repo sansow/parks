@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/name: nationalparks
     app.kubernetes.io/part-of: parks
     app.kubernetes.io/component: backend
+    app.kubernetes.io/type: nationalparks-backend
   annotations:
     image.openshift.io/triggers: |
       [{
