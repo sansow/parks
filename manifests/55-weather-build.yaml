@@ -1,3 +1,9 @@
+# =============================================================================
+# Docker (multi-stage) build for the weather Quarkus app.
+# Switched from Source/S2I to Docker strategy because the OpenJDK S2I builder
+# auto-detects Quarkus and forces target/quarkus-app/ paths that fight uber-jar
+# packaging. The multi-stage Dockerfile in the source repo handles it cleanly.
+# =============================================================================
 ---
 apiVersion: image.openshift.io/v1
 kind: ImageStream
@@ -27,14 +33,9 @@ spec:
       ref: main
     contextDir: weather-service
   strategy:
-    type: Source
-    sourceStrategy:
-      from:
-        kind: ImageStreamTag
-        name: ubi8-openjdk-17:1.18
-        namespace: openshift
-      env:
-        - { name: MAVEN_S2I_GOALS, value: "package -DskipTests" }
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: src/main/docker/Dockerfile.jvm
   output:
     to:
       kind: ImageStreamTag
@@ -46,4 +47,4 @@ spec:
   failedBuildsHistoryLimit: 3
   resources:
     limits:
-      memory: 1Gi
+      memory: 2Gi                       # Maven compile in stage 1 needs headroom
