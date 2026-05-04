@@ -8,3 +8,5 @@ resources:
   - 35-nationalparks-build.yaml      # S2I build from sansow/nationalparks
   - 40-nationalparks.yaml
   - 50-parksmap.yaml               # add after Phase 1 (Argo + nationalparks) is green
+  - 55-weather-build.yaml          # weather S2I build
+  - 60-weather-knative.yaml        # serverless weather endpoint
