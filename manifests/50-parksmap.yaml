@@ -30,8 +30,8 @@ spec:
             - { name: BACKEND_LABEL_NAME,  value: type }
             - { name: BACKEND_LABEL_VALUE, value: nationalparks-backend }
           resources:
-            requests: { cpu: 100m, memory: 128Mi }
-            limits:   { cpu: 300m, memory: 256Mi }
+            requests: { cpu: 500m, memory: 512Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
           readinessProbe:
             httpGet: { path: /ws/healthz, port: 8080 }
             initialDelaySeconds: 10
