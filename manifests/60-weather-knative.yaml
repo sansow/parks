@@ -1,7 +1,10 @@
 # =============================================================================
-# Knative Service — serverless weather lookup. Scales to zero when idle, spins
-# up replicas under load. Knative auto-creates a Route (so no separate Route
-# resource needed). Image is built by the BuildConfig in 55-weather-build.yaml.
+# Knative Service — serverless weather lookup with TWO revisions:
+#   weather-v1 — original (12 parks)
+#   weather-v2 — adds Crater Lake, Arches, Bryce Canyon (15 parks)
+#
+# Traffic split: 80% v1 / 20% v2 — change percentages to redirect traffic.
+# Set { latestRevision: true, percent: 100 } to send all traffic to the latest.
 # =============================================================================
 ---
 apiVersion: serving.knative.dev/v1
@@ -16,9 +19,8 @@ metadata:
 spec:
   template:
     metadata:
-      # Revision name. Bump v1 -> v2 between builds to demo revisions
-      # and traffic splitting.
-      name: weather-v1
+      # ↑ bump this and REVISION_LABEL together to create a new revision.
+      name: weather-v2
       annotations:
         autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/max-scale: "20"
@@ -34,13 +36,11 @@ spec:
           ports:
             - { containerPort: 8080, name: http1 }
           env:
-            - { name: REVISION_LABEL, value: "v1" }
+            - { name: REVISION_LABEL, value: "v2" }
             - name: POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
-          readinessProbe:
-            httpGet: { path: /q/health/ready, port: 8080 }
-          livenessProbe:
-            httpGet: { path: /q/health/live, port: 8080 }
   traffic:
-    - latestRevision: true
-      percent: 100
+    - revisionName: weather-v1
+      percent: 80
+    - revisionName: weather-v2
+      percent: 20

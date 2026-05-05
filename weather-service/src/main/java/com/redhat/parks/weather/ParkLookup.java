@@ -20,7 +20,10 @@ public final class ParkLookup {
         Map.entry("rocky-mountain",     new Coords(40.343, -105.688)),
         Map.entry("joshua-tree",        new Coords(33.881, -115.900)),
         Map.entry("denali",             new Coords(63.069, -151.005)),
-        Map.entry("everglades",         new Coords(25.286,  -80.899))
+        Map.entry("everglades",         new Coords(25.286,  -80.899)),
+        Map.entry("crater-lake",        new Coords(42.882, -122.135)),
+        Map.entry("arches",             new Coords(38.733, -109.592)),
+        Map.entry("bryce-canyon",       new Coords(37.593, -112.187))
     );
 
     private ParkLookup() {}
