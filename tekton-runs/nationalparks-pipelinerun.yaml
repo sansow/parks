@@ -3,7 +3,7 @@
 # desired state — don't put them in the Argo-managed kustomization. Apply
 # manually with `oc create -f` to fire a build.
 #
-# Defaults to the main branch of sansow/openshift-25; override with -p.
+# Tekton v1 spec: serviceAccountName lives under taskRunTemplate.
 # =============================================================================
 ---
 apiVersion: tekton.dev/v1
@@ -14,8 +14,10 @@ metadata:
   labels:
     tekton.dev/pipeline: nationalparks-ci
 spec:
-  serviceAccountName: pipeline
-  pipelineRef: { name: nationalparks-ci }
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  pipelineRef:
+    name: nationalparks-ci
   params:
     - { name: git-url,      value: 'https://github.com/sansow/openshift-25.git' }
     - { name: git-revision, value: 'main' }
